@@ -103,3 +103,14 @@ def test_workqueue_get_by_reference(ats: AutomationServer):
     items = workqueue.get_item_by_reference("non-existent-reference")
     assert len(items) == 0
     
+def test_workqueue_get_by_name(ats: AutomationServer):
+
+    workqueue = ats.workqueue()
+
+    assert workqueue is not None
+    assert workqueue.name is not None
+    
+    wq2 = workqueue.get_workqueue_by_name(workqueue.name)
+    assert wq2 is not None
+    assert wq2.id == workqueue.id
+

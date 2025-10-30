@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict
 
 from ._config import AutomationServerConfig
 from ._logging import ats_logging_handler
-
+from urllib.parse import quote
 
 class Session(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -102,8 +102,19 @@ class Workqueue(BaseModel):
 
         return Workqueue.model_validate(response.json())
 
+    @staticmethod
+    def get_workqueue_by_name(workqueue_name: str):
+        response = requests.get(
+            f"{AutomationServerConfig.url}/workqueues/by_name/{quote(workqueue_name)}",
+
+            headers={"Authorization": f"Bearer {AutomationServerConfig.token}"},
+        )
+        response.raise_for_status()
+
+        return Workqueue.model_validate(response.json())
+
     def clear_workqueue(
-        self, workitem_status: WorkItemStatus = None, days_older_than=None
+        self, workitem_status: WorkItemStatus | None = None, days_older_than=None
     ):
         response = requests.post(
             f"{AutomationServerConfig.url}/workqueues/{self.id}/clear",
@@ -116,7 +127,7 @@ class Workqueue(BaseModel):
         response.raise_for_status()
 
     def get_item_by_reference(
-        self, reference: str, status: WorkItemStatus = None
+        self, reference: str, status: WorkItemStatus | None = None
     ) -> list["WorkItem"]:
         """Retrieve work items from the workqueue by their reference identifier.
 
@@ -157,7 +168,7 @@ class Workqueue(BaseModel):
         """
 
         response = requests.get(
-            f"{AutomationServerConfig.url}/workqueues/{self.id}/by_reference/{requests.utils.quote(reference)}",
+            f"{AutomationServerConfig.url}/workqueues/{self.id}/by_reference/{quote(reference)}",
             headers={"Authorization": f"Bearer {AutomationServerConfig.token}"},
             params={"status": status} if status else None,
         )
