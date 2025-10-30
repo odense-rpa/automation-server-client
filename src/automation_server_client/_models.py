@@ -4,6 +4,7 @@ import urllib.parse
 
 from datetime import datetime
 from enum import Enum
+from typing import Optional
 from pydantic import BaseModel, ConfigDict
 
 from ._config import AutomationServerConfig
@@ -20,7 +21,7 @@ class Session(BaseModel):
     status: str
     stop_requested: bool
     deleted: bool
-    parameters: str
+    parameters: Optional[str] = ""
     created_at: datetime
     updated_at: datetime
 

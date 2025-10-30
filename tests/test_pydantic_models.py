@@ -116,3 +116,28 @@ def test_backward_compatibility_with_minimal_data():
     session = Session.model_validate(minimal_session_data)
     assert session.id == 1
     assert session.status == "running"
+
+def test_session_with_null_parameters():
+    """Test that models work with minimal required data"""
+    minimal_session_data = {
+        "id": 1,
+        "process_id": 100,
+        "resource_id": 200,
+        "dispatched_at": "2023-01-01T10:00:00Z",
+        "status": "running",
+        "stop_requested": False,
+        "deleted": False,
+        "parameters": None,
+        "created_at": "2023-01-01T09:00:00Z",
+        "updated_at": "2023-01-01T10:00:00Z",
+    }
+
+    session = Session.model_validate(minimal_session_data)
+    assert session.id == 1
+    assert session.status == "running"
+    assert session.parameters is None
+
+    minimal_session_data["parameters"] = ""
+    session = Session.model_validate(minimal_session_data)
+    assert session.parameters == ""
+
