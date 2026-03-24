@@ -1,18 +1,21 @@
 import pytest
 import os
+from dotenv import load_dotenv
 from automation_server_client import AutomationServer
 import httpx
+
+load_dotenv()
 
 
 @pytest.fixture(scope="function")
 def ats() -> AutomationServer:
     # We assume there is a running target development environment
-    os.environ["ATS_URL"] = "http://localhost/api"
+    os.environ.setdefault("ATS_URL", "http://localhost/api")
 
     TEST_WORKQUEUE = "Client library test"
 
     os.environ["ATS_WORKQUEUE_OVERRIDE"] = str(
-        _ensure_workqueue(os.environ["ATS_URL"], TEST_WORKQUEUE)
+        _ensure_workqueue(os.environ.get("ATS_URL", "http://localhost/api"), TEST_WORKQUEUE)
     )
 
     ats = AutomationServer.from_environment()

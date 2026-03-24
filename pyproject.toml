@@ -1,6 +1,6 @@
 [project]
 name = "automation-server-client"
-version = "0.2.1"
+version = "0.3.0"
 description = "This implements the base classes for building processes for the automation server."
 readme = "README.md"
 authors = [

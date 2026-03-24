@@ -16,8 +16,8 @@ class Session(BaseModel):
 
     id: int
     process_id: int
-    resource_id: int
-    dispatched_at: datetime
+    resource_id: Optional[int] = None
+    dispatched_at: Optional[datetime] = None
     status: str
     stop_requested: bool
     deleted: bool
@@ -39,12 +39,12 @@ class Session(BaseModel):
 class Process(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    id: int
+    id: Optional[int] = None
     name: str
-    description: str
-    requirements: str
-    target_type: str
-    target_source: str
+    description: Optional[str] = ""
+    requirements: Optional[str] = ""
+    target_type: Optional[str] = None
+    target_source: Optional[str] = ""
     target_credentials_id: int | None = None
     credentials_id: int | None = None
     workqueue_id: int | None = None
@@ -74,9 +74,9 @@ class WorkItemStatus(str, Enum):
 class Workqueue(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    id: int
+    id: Optional[int] = None
     name: str
-    description: str
+    description: Optional[str] = None
     enabled: bool
     deleted: bool
     created_at: datetime
@@ -202,13 +202,15 @@ class Workqueue(BaseModel):
 class WorkItem(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    id: int
+    id: Optional[int] = None
     data: dict
-    reference: str
+    reference: Optional[str] = ""
     locked: bool
     status: str
     message: str
     workqueue_id: int
+    started_at: Optional[datetime] = None
+    work_duration_seconds: Optional[int] = None
     created_at: datetime
     updated_at: datetime
 
@@ -271,11 +273,11 @@ class WorkItem(BaseModel):
 class Credential(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    id: int
+    id: Optional[int] = None
     name: str
     data: dict
-    username: str
-    password: str
+    username: Optional[str] = None
+    password: Optional[str] = None
     deleted: bool
     created_at: datetime
     updated_at: datetime
