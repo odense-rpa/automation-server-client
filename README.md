@@ -29,6 +29,10 @@ For a more complete implementation see the [process-template](https://github.com
 * Retrieve work items for processing
 * Logging actions and workitems
 
+## Migrating from 0.2.x to 0.3.0
+
+The HTTP client was changed from `requests` to `httpx`. If your code catches `requests.HTTPError` from this library, update those to `httpx.HTTPStatusError`. See the [changelog](CHANGELOG.md) for the full list of changes.
+
 ## Documentation
 For detailed documentation, please visit Documentation Link.
 
