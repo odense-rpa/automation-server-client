@@ -6,10 +6,8 @@ from ._models import Session, Process, Workqueue
 
 
 class AutomationServer:
-    session_id = None
-
     def __init__(self, session_id=None):
-        session_id = session_id
+        self.session_id = session_id
         self.workqueue_id = None
 
         self.url = AutomationServerConfig.url

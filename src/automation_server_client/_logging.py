@@ -31,7 +31,7 @@ class AutomationServerLoggingHandler(logging.Handler):
         except Exception as e:
             # Handle any exceptions that occur when sending the log
             print(
-                f"Failed to send log to {AutomationServerConfig.url}/sessions/{AutomationServerConfig.session}/log: {e}"
+                f"Failed to send log to {AutomationServerConfig.url}/audit-logs: {e}"
             )
 
     def start_workitem(self, workitem_id: int):
@@ -49,7 +49,7 @@ class AutomationServerLoggingHandler(logging.Handler):
 
         # Get all extra fields (anything not in standard LogRecord attributes)
         standard_attrs = {
-            "asctimename",
+            "asctime",
             "msg",
             "args",
             "levelname",
@@ -63,7 +63,6 @@ class AutomationServerLoggingHandler(logging.Handler):
             "created",
             "msecs",
             "relativeCreated",
-            "taskNamethread",
             "taskName",
             "thread",
             "threadName",

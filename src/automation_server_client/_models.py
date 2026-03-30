@@ -1,15 +1,14 @@
 import logging
 import requests
-import urllib.parse
 
 from datetime import datetime
 from enum import Enum
 from typing import Optional
 from pydantic import BaseModel, ConfigDict
+from urllib.parse import quote
 
 from ._config import AutomationServerConfig
 from ._logging import ats_logging_handler
-from urllib.parse import quote
 
 class Session(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -27,6 +26,7 @@ class Session(BaseModel):
 
     @staticmethod
     def get_session(session_id):
+        """Retrieve a session by ID from the automation server."""
         response = requests.get(
             f"{AutomationServerConfig.url}/sessions/{session_id}",
             headers={"Authorization": f"Bearer {AutomationServerConfig.token}"},
@@ -54,6 +54,7 @@ class Process(BaseModel):
 
     @staticmethod
     def get_process(process_id):
+        """Retrieve a process by ID from the automation server."""
         response = requests.get(
             f"{AutomationServerConfig.url}/processes/{process_id}",
             headers={"Authorization": f"Bearer {AutomationServerConfig.token}"},
@@ -83,6 +84,7 @@ class Workqueue(BaseModel):
     updated_at: datetime
 
     def add_item(self, data: dict, reference: str):
+        """Add a new work item to the workqueue."""
         response = requests.post(
             f"{AutomationServerConfig.url}/workqueues/{self.id}/add",
             headers={"Authorization": f"Bearer {AutomationServerConfig.token}"},
@@ -94,6 +96,7 @@ class Workqueue(BaseModel):
 
     @staticmethod
     def get_workqueue(workqueue_id):
+        """Retrieve a workqueue by ID from the automation server."""
         response = requests.get(
             f"{AutomationServerConfig.url}/workqueues/{workqueue_id}",
             headers={"Authorization": f"Bearer {AutomationServerConfig.token}"},
@@ -104,6 +107,7 @@ class Workqueue(BaseModel):
 
     @staticmethod
     def get_workqueue_by_name(workqueue_name: str):
+        """Retrieve a workqueue by name from the automation server."""
         response = requests.get(
             f"{AutomationServerConfig.url}/workqueues/by_name/{quote(workqueue_name)}",
 
@@ -116,6 +120,7 @@ class Workqueue(BaseModel):
     def clear_workqueue(
         self, workitem_status: WorkItemStatus | None = None, days_older_than=None
     ):
+        """Clear work items from the workqueue, optionally filtered by status or age."""
         response = requests.post(
             f"{AutomationServerConfig.url}/workqueues/{self.id}/clear",
             json={
@@ -129,43 +134,7 @@ class Workqueue(BaseModel):
     def get_item_by_reference(
         self, reference: str, status: WorkItemStatus | None = None
     ) -> list["WorkItem"]:
-        """Retrieve work items from the workqueue by their reference identifier.
-
-        This method queries the automation server to find all work items that match
-        the specified reference string. The reference is typically used as a unique
-        identifier or business key for work items, making this method useful for
-        duplicate checking, status verification, or retrieving specific items.
-
-        Args:
-            reference (str): The reference identifier to search for. The reference
-                will be URL-encoded automatically to handle special characters.
-            status (WorkItemStatus, optional): If provided, filters results to only
-                include items with the specified status. Defaults to None (no filtering).
-
-        Returns:
-            list[WorkItem]: A list of WorkItem objects that match the reference.
-                Returns an empty list if no matching items are found.
-
-        Raises:
-            requests.HTTPError: If the API request fails (e.g., network error,
-                authentication failure, or server error).
-
-        Example:
-            >>> workqueue = Workqueue.get_workqueue(123)
-            >>> # Find all items with reference "INV-2023-001"
-            >>> items = workqueue.get_item_by_reference("INV-2023-001")
-            >>>
-            >>> # Find only completed items with the reference
-            >>> completed_items = workqueue.get_item_by_reference(
-            ...     "INV-2023-001",
-            ...     WorkItemStatus.COMPLETED
-            ... )
-            >>>
-            >>> # Check for duplicates before adding a new item
-            >>> existing = workqueue.get_item_by_reference("new-ref")
-            >>> if not existing:
-            ...     workqueue.add_item({"data": "value"}, "new-ref")
-        """
+        """Retrieve work items by reference, optionally filtered by status."""
 
         response = requests.get(
             f"{AutomationServerConfig.url}/workqueues/{self.id}/by_reference/{quote(reference)}",
@@ -175,7 +144,7 @@ class Workqueue(BaseModel):
         response.raise_for_status()
 
         items = response.json()
-        return [WorkItem(**item) for item in items]
+        return [WorkItem.model_validate(item) for item in items]
 
     def __iter__(self):
         return self
@@ -214,10 +183,8 @@ class WorkItem(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    def __init__(self, **data):
-        super().__init__(**data)
-
     def update(self, data: dict):
+        """Update the work item's data on the automation server."""
         response = requests.put(
             f"{AutomationServerConfig.url}/workitems/{self.id}",
             headers={"Authorization": f"Bearer {AutomationServerConfig.token}"},
@@ -239,27 +206,29 @@ class WorkItem(BaseModel):
         if exc_type:
             logger.error(f"An error occurred while processing {self}: {exc_value}")
             self.fail(str(exc_value))
-
-        logger.debug(f"Finished processing {self}")
-        ats_logging_handler.end_workitem()
-
-        # If we are working on an item that is in progress, we will mark it as completed
-        if self.status == "in progress":
+        elif self.status == "in progress":
             self.complete("Completed")
+
+        logger.debug(f"{'Failed' if exc_type else 'Finished'} processing {self}")
+        ats_logging_handler.end_workitem()
 
     def __str__(self) -> str:
         return f"WorkItem(id={self.id}, reference={self.reference}, data={self.data})"
 
     def fail(self, message):
+        """Mark the work item as failed."""
         self.update_status("failed", message)
 
     def complete(self, message):
+        """Mark the work item as completed."""
         self.update_status("completed", message)
 
     def pending_user(self, message):
+        """Mark the work item as pending user action."""
         self.update_status("pending user action", message)
 
     def update_status(self, status, message: str = ""):
+        """Update the work item's status and message on the automation server."""
         response = requests.put(
             f"{AutomationServerConfig.url}/workitems/{self.id}/status",
             headers={"Authorization": f"Bearer {AutomationServerConfig.token}"},
@@ -284,8 +253,9 @@ class Credential(BaseModel):
 
     @staticmethod
     def get_credential(credential: str) -> "Credential":
+        """Retrieve a credential by name from the automation server."""
         response = requests.get(
-            f"{AutomationServerConfig.url}/credentials/by_name/{urllib.parse.quote(credential)}",
+            f"{AutomationServerConfig.url}/credentials/by_name/{quote(credential)}",
             headers={"Authorization": f"Bearer {AutomationServerConfig.token}"},
         )
         response.raise_for_status()
