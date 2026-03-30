@@ -1,5 +1,5 @@
 import logging
-import requests
+import httpx
 import traceback
 
 from typing import Dict, Any
@@ -21,9 +21,9 @@ class AutomationServerLoggingHandler(logging.Handler):
             return
 
         try:
-            response = requests.post(
+            response = httpx.post(
                 f"{AutomationServerConfig.url}/audit-logs",
-                headers={"Authorization": f"Bearer {AutomationServerConfig.token}"},
+                headers=AutomationServerConfig.auth_headers(),
                 json=log_record,
             )
             response.raise_for_status()

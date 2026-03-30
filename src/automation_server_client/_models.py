@@ -1,5 +1,5 @@
 import logging
-import requests
+import httpx
 
 from datetime import datetime
 from enum import Enum
@@ -27,9 +27,9 @@ class Session(BaseModel):
     @staticmethod
     def get_session(session_id):
         """Retrieve a session by ID from the automation server."""
-        response = requests.get(
+        response = httpx.get(
             f"{AutomationServerConfig.url}/sessions/{session_id}",
-            headers={"Authorization": f"Bearer {AutomationServerConfig.token}"},
+            headers=AutomationServerConfig.auth_headers(),
         )
         response.raise_for_status()
 
@@ -55,9 +55,9 @@ class Process(BaseModel):
     @staticmethod
     def get_process(process_id):
         """Retrieve a process by ID from the automation server."""
-        response = requests.get(
+        response = httpx.get(
             f"{AutomationServerConfig.url}/processes/{process_id}",
-            headers={"Authorization": f"Bearer {AutomationServerConfig.token}"},
+            headers=AutomationServerConfig.auth_headers(),
         )
         response.raise_for_status()
 
@@ -85,9 +85,9 @@ class Workqueue(BaseModel):
 
     def add_item(self, data: dict, reference: str):
         """Add a new work item to the workqueue."""
-        response = requests.post(
+        response = httpx.post(
             f"{AutomationServerConfig.url}/workqueues/{self.id}/add",
-            headers={"Authorization": f"Bearer {AutomationServerConfig.token}"},
+            headers=AutomationServerConfig.auth_headers(),
             json={"data": data, "reference": reference},
         )
         response.raise_for_status()
@@ -97,9 +97,9 @@ class Workqueue(BaseModel):
     @staticmethod
     def get_workqueue(workqueue_id):
         """Retrieve a workqueue by ID from the automation server."""
-        response = requests.get(
+        response = httpx.get(
             f"{AutomationServerConfig.url}/workqueues/{workqueue_id}",
-            headers={"Authorization": f"Bearer {AutomationServerConfig.token}"},
+            headers=AutomationServerConfig.auth_headers(),
         )
         response.raise_for_status()
 
@@ -108,10 +108,10 @@ class Workqueue(BaseModel):
     @staticmethod
     def get_workqueue_by_name(workqueue_name: str):
         """Retrieve a workqueue by name from the automation server."""
-        response = requests.get(
+        response = httpx.get(
             f"{AutomationServerConfig.url}/workqueues/by_name/{quote(workqueue_name)}",
 
-            headers={"Authorization": f"Bearer {AutomationServerConfig.token}"},
+            headers=AutomationServerConfig.auth_headers(),
         )
         response.raise_for_status()
 
@@ -121,13 +121,13 @@ class Workqueue(BaseModel):
         self, workitem_status: WorkItemStatus | None = None, days_older_than=None
     ):
         """Clear work items from the workqueue, optionally filtered by status or age."""
-        response = requests.post(
+        response = httpx.post(
             f"{AutomationServerConfig.url}/workqueues/{self.id}/clear",
             json={
                 "workitem_status": workitem_status,
                 "days_older_than": days_older_than,
             },
-            headers={"Authorization": f"Bearer {AutomationServerConfig.token}"},
+            headers=AutomationServerConfig.auth_headers(),
         )
         response.raise_for_status()
 
@@ -136,10 +136,10 @@ class Workqueue(BaseModel):
     ) -> list["WorkItem"]:
         """Retrieve work items by reference, optionally filtered by status."""
 
-        response = requests.get(
+        response = httpx.get(
             f"{AutomationServerConfig.url}/workqueues/{self.id}/by_reference/{quote(reference)}",
-            headers={"Authorization": f"Bearer {AutomationServerConfig.token}"},
-            params={"status": status} if status else None,
+            headers=AutomationServerConfig.auth_headers(),
+            params={"status": status.value} if status else None,
         )
         response.raise_for_status()
 
@@ -151,9 +151,9 @@ class Workqueue(BaseModel):
 
     def __next__(self):
         ats_logging_handler.end_workitem()
-        response = requests.get(
+        response = httpx.get(
             f"{AutomationServerConfig.url}/workqueues/{self.id}/next_item",
-            headers={"Authorization": f"Bearer {AutomationServerConfig.token}"},
+            headers=AutomationServerConfig.auth_headers(),
         )
 
         if response.status_code == 204:
@@ -185,9 +185,9 @@ class WorkItem(BaseModel):
 
     def update(self, data: dict):
         """Update the work item's data on the automation server."""
-        response = requests.put(
+        response = httpx.put(
             f"{AutomationServerConfig.url}/workitems/{self.id}",
-            headers={"Authorization": f"Bearer {AutomationServerConfig.token}"},
+            headers=AutomationServerConfig.auth_headers(),
             json={"data": data, "reference": self.reference},
         )
         response.raise_for_status()
@@ -229,9 +229,9 @@ class WorkItem(BaseModel):
 
     def update_status(self, status, message: str = ""):
         """Update the work item's status and message on the automation server."""
-        response = requests.put(
+        response = httpx.put(
             f"{AutomationServerConfig.url}/workitems/{self.id}/status",
-            headers={"Authorization": f"Bearer {AutomationServerConfig.token}"},
+            headers=AutomationServerConfig.auth_headers(),
             json={"status": status, "message": message},
         )
         response.raise_for_status()
@@ -254,9 +254,9 @@ class Credential(BaseModel):
     @staticmethod
     def get_credential(credential: str) -> "Credential":
         """Retrieve a credential by name from the automation server."""
-        response = requests.get(
+        response = httpx.get(
             f"{AutomationServerConfig.url}/credentials/by_name/{quote(credential)}",
-            headers={"Authorization": f"Bearer {AutomationServerConfig.token}"},
+            headers=AutomationServerConfig.auth_headers(),
         )
         response.raise_for_status()
 
