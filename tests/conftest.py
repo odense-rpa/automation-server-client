@@ -1,13 +1,16 @@
 import pytest
 import os
+from dotenv import load_dotenv
 from automation_server_client import AutomationServer
 import httpx
+
+load_dotenv()
 
 
 @pytest.fixture(scope="function")
 def ats() -> AutomationServer:
     # We assume there is a running target development environment
-    os.environ["ATS_URL"] = "http://localhost/api"
+    os.environ.setdefault("ATS_URL", "http://localhost/api")
 
     TEST_WORKQUEUE = "Client library test"
 

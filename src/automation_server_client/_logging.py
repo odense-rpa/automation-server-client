@@ -1,5 +1,5 @@
 import logging
-import requests
+import httpx
 import traceback
 
 from typing import Dict, Any
@@ -21,9 +21,9 @@ class AutomationServerLoggingHandler(logging.Handler):
             return
 
         try:
-            response = requests.post(
+            response = httpx.post(
                 f"{AutomationServerConfig.url}/audit-logs",
-                headers={"Authorization": f"Bearer {AutomationServerConfig.token}"},
+                headers=AutomationServerConfig.auth_headers(),
                 json=log_record,
             )
             response.raise_for_status()
@@ -31,7 +31,7 @@ class AutomationServerLoggingHandler(logging.Handler):
         except Exception as e:
             # Handle any exceptions that occur when sending the log
             print(
-                f"Failed to send log to {AutomationServerConfig.url}/sessions/{AutomationServerConfig.session}/log: {e}"
+                f"Failed to send log to {AutomationServerConfig.url}/audit-logs: {e}"
             )
 
     def start_workitem(self, workitem_id: int):
@@ -49,7 +49,7 @@ class AutomationServerLoggingHandler(logging.Handler):
 
         # Get all extra fields (anything not in standard LogRecord attributes)
         standard_attrs = {
-            "asctimename",
+            "asctime",
             "msg",
             "args",
             "levelname",
@@ -63,7 +63,6 @@ class AutomationServerLoggingHandler(logging.Handler):
             "created",
             "msecs",
             "relativeCreated",
-            "taskNamethread",
             "taskName",
             "thread",
             "threadName",

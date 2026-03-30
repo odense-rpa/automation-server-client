@@ -1,23 +1,22 @@
 import logging
-import requests
-import urllib.parse
+import httpx
 
 from datetime import datetime
 from enum import Enum
 from typing import Optional
 from pydantic import BaseModel, ConfigDict
+from urllib.parse import quote
 
 from ._config import AutomationServerConfig
 from ._logging import ats_logging_handler
-
 
 class Session(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     id: int
     process_id: int
-    resource_id: int
-    dispatched_at: datetime
+    resource_id: Optional[int] = None
+    dispatched_at: Optional[datetime] = None
     status: str
     stop_requested: bool
     deleted: bool
@@ -27,9 +26,10 @@ class Session(BaseModel):
 
     @staticmethod
     def get_session(session_id):
-        response = requests.get(
+        """Retrieve a session by ID from the automation server."""
+        response = httpx.get(
             f"{AutomationServerConfig.url}/sessions/{session_id}",
-            headers={"Authorization": f"Bearer {AutomationServerConfig.token}"},
+            headers=AutomationServerConfig.auth_headers(),
         )
         response.raise_for_status()
 
@@ -39,12 +39,12 @@ class Session(BaseModel):
 class Process(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    id: int
+    id: Optional[int] = None
     name: str
-    description: str
-    requirements: str
-    target_type: str
-    target_source: str
+    description: Optional[str] = ""
+    requirements: Optional[str] = ""
+    target_type: Optional[str] = None
+    target_source: Optional[str] = ""
     target_credentials_id: int | None = None
     credentials_id: int | None = None
     workqueue_id: int | None = None
@@ -54,9 +54,10 @@ class Process(BaseModel):
 
     @staticmethod
     def get_process(process_id):
-        response = requests.get(
+        """Retrieve a process by ID from the automation server."""
+        response = httpx.get(
             f"{AutomationServerConfig.url}/processes/{process_id}",
-            headers={"Authorization": f"Bearer {AutomationServerConfig.token}"},
+            headers=AutomationServerConfig.auth_headers(),
         )
         response.raise_for_status()
 
@@ -74,18 +75,19 @@ class WorkItemStatus(str, Enum):
 class Workqueue(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    id: int
+    id: Optional[int] = None
     name: str
-    description: str
+    description: Optional[str] = None
     enabled: bool
     deleted: bool
     created_at: datetime
     updated_at: datetime
 
     def add_item(self, data: dict, reference: str):
-        response = requests.post(
+        """Add a new work item to the workqueue."""
+        response = httpx.post(
             f"{AutomationServerConfig.url}/workqueues/{self.id}/add",
-            headers={"Authorization": f"Bearer {AutomationServerConfig.token}"},
+            headers=AutomationServerConfig.auth_headers(),
             json={"data": data, "reference": reference},
         )
         response.raise_for_status()
@@ -94,86 +96,64 @@ class Workqueue(BaseModel):
 
     @staticmethod
     def get_workqueue(workqueue_id):
-        response = requests.get(
+        """Retrieve a workqueue by ID from the automation server."""
+        response = httpx.get(
             f"{AutomationServerConfig.url}/workqueues/{workqueue_id}",
-            headers={"Authorization": f"Bearer {AutomationServerConfig.token}"},
+            headers=AutomationServerConfig.auth_headers(),
+        )
+        response.raise_for_status()
+
+        return Workqueue.model_validate(response.json())
+
+    @staticmethod
+    def get_workqueue_by_name(workqueue_name: str):
+        """Retrieve a workqueue by name from the automation server."""
+        response = httpx.get(
+            f"{AutomationServerConfig.url}/workqueues/by_name/{quote(workqueue_name)}",
+
+            headers=AutomationServerConfig.auth_headers(),
         )
         response.raise_for_status()
 
         return Workqueue.model_validate(response.json())
 
     def clear_workqueue(
-        self, workitem_status: WorkItemStatus = None, days_older_than=None
+        self, workitem_status: WorkItemStatus | None = None, days_older_than=None
     ):
-        response = requests.post(
+        """Clear work items from the workqueue, optionally filtered by status or age."""
+        response = httpx.post(
             f"{AutomationServerConfig.url}/workqueues/{self.id}/clear",
             json={
                 "workitem_status": workitem_status,
                 "days_older_than": days_older_than,
             },
-            headers={"Authorization": f"Bearer {AutomationServerConfig.token}"},
+            headers=AutomationServerConfig.auth_headers(),
         )
         response.raise_for_status()
 
     def get_item_by_reference(
-        self, reference: str, status: WorkItemStatus = None
+        self, reference: str, status: WorkItemStatus | None = None
     ) -> list["WorkItem"]:
-        """Retrieve work items from the workqueue by their reference identifier.
+        """Retrieve work items by reference, optionally filtered by status."""
 
-        This method queries the automation server to find all work items that match
-        the specified reference string. The reference is typically used as a unique
-        identifier or business key for work items, making this method useful for
-        duplicate checking, status verification, or retrieving specific items.
-
-        Args:
-            reference (str): The reference identifier to search for. The reference
-                will be URL-encoded automatically to handle special characters.
-            status (WorkItemStatus, optional): If provided, filters results to only
-                include items with the specified status. Defaults to None (no filtering).
-
-        Returns:
-            list[WorkItem]: A list of WorkItem objects that match the reference.
-                Returns an empty list if no matching items are found.
-
-        Raises:
-            requests.HTTPError: If the API request fails (e.g., network error,
-                authentication failure, or server error).
-
-        Example:
-            >>> workqueue = Workqueue.get_workqueue(123)
-            >>> # Find all items with reference "INV-2023-001"
-            >>> items = workqueue.get_item_by_reference("INV-2023-001")
-            >>>
-            >>> # Find only completed items with the reference
-            >>> completed_items = workqueue.get_item_by_reference(
-            ...     "INV-2023-001",
-            ...     WorkItemStatus.COMPLETED
-            ... )
-            >>>
-            >>> # Check for duplicates before adding a new item
-            >>> existing = workqueue.get_item_by_reference("new-ref")
-            >>> if not existing:
-            ...     workqueue.add_item({"data": "value"}, "new-ref")
-        """
-
-        response = requests.get(
-            f"{AutomationServerConfig.url}/workqueues/{self.id}/by_reference/{requests.utils.quote(reference)}",
-            headers={"Authorization": f"Bearer {AutomationServerConfig.token}"},
-            params={"status": status} if status else None,
+        response = httpx.get(
+            f"{AutomationServerConfig.url}/workqueues/{self.id}/by_reference/{quote(reference)}",
+            headers=AutomationServerConfig.auth_headers(),
+            params={"status": status.value} if status else None,
         )
         response.raise_for_status()
 
         items = response.json()
-        return [WorkItem(**item) for item in items]
+        return [WorkItem.model_validate(item) for item in items]
 
     def __iter__(self):
         return self
 
     def __next__(self):
         ats_logging_handler.end_workitem()
-        response = requests.get(
+        response = httpx.get(
             f"{AutomationServerConfig.url}/workqueues/{self.id}/next_item",
-            headers={"Authorization": f"Bearer {AutomationServerConfig.token}"},
+            headers=AutomationServerConfig.auth_headers(),
         )
 
         if response.status_code == 204:
@@ -191,23 +171,23 @@ class Workqueue(BaseModel):
 class WorkItem(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    id: int
+    id: Optional[int] = None
     data: dict
-    reference: str
+    reference: Optional[str] = ""
     locked: bool
     status: str
     message: str
     workqueue_id: int
+    started_at: Optional[datetime] = None
+    work_duration_seconds: Optional[int] = None
     created_at: datetime
     updated_at: datetime
 
-    def __init__(self, **data):
-        super().__init__(**data)
-
     def update(self, data: dict):
-        response = requests.put(
+        """Update the work item's data on the automation server."""
+        response = httpx.put(
             f"{AutomationServerConfig.url}/workitems/{self.id}",
-            headers={"Authorization": f"Bearer {AutomationServerConfig.token}"},
+            headers=AutomationServerConfig.auth_headers(),
             json={"data": data, "reference": self.reference},
         )
         response.raise_for_status()
@@ -226,30 +206,32 @@ class WorkItem(BaseModel):
         if exc_type:
             logger.error(f"An error occurred while processing {self}: {exc_value}")
             self.fail(str(exc_value))
-
-        logger.debug(f"Finished processing {self}")
-        ats_logging_handler.end_workitem()
-
-        # If we are working on an item that is in progress, we will mark it as completed
-        if self.status == "in progress":
+        elif self.status == "in progress":
             self.complete("Completed")
+
+        logger.debug(f"{'Failed' if exc_type else 'Finished'} processing {self}")
+        ats_logging_handler.end_workitem()
 
     def __str__(self) -> str:
         return f"WorkItem(id={self.id}, reference={self.reference}, data={self.data})"
 
     def fail(self, message):
+        """Mark the work item as failed."""
         self.update_status("failed", message)
 
     def complete(self, message):
+        """Mark the work item as completed."""
         self.update_status("completed", message)
 
     def pending_user(self, message):
+        """Mark the work item as pending user action."""
         self.update_status("pending user action", message)
 
     def update_status(self, status, message: str = ""):
-        response = requests.put(
+        """Update the work item's status and message on the automation server."""
+        response = httpx.put(
             f"{AutomationServerConfig.url}/workitems/{self.id}/status",
-            headers={"Authorization": f"Bearer {AutomationServerConfig.token}"},
+            headers=AutomationServerConfig.auth_headers(),
             json={"status": status, "message": message},
         )
         response.raise_for_status()
@@ -260,20 +242,21 @@ class WorkItem(BaseModel):
 class Credential(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    id: int
+    id: Optional[int] = None
     name: str
     data: dict
-    username: str
-    password: str
+    username: Optional[str] = None
+    password: Optional[str] = None
     deleted: bool
     created_at: datetime
     updated_at: datetime
 
     @staticmethod
     def get_credential(credential: str) -> "Credential":
-        response = requests.get(
-            f"{AutomationServerConfig.url}/credentials/by_name/{urllib.parse.quote(credential)}",
-            headers={"Authorization": f"Bearer {AutomationServerConfig.token}"},
+        """Retrieve a credential by name from the automation server."""
+        response = httpx.get(
+            f"{AutomationServerConfig.url}/credentials/by_name/{quote(credential)}",
+            headers=AutomationServerConfig.auth_headers(),
         )
         response.raise_for_status()
 

@@ -33,3 +33,10 @@ class AutomationServerConfig:
 
         if AutomationServerConfig.url == "":
             raise ValueError("ATS_URL is not set in the environment")
+
+    @staticmethod
+    def auth_headers() -> dict:
+        """Return Authorization header dict, or empty dict if no token is configured."""
+        if AutomationServerConfig.token:
+            return {"Authorization": f"Bearer {AutomationServerConfig.token}"}
+        return {}
