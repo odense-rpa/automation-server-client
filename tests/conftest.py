@@ -15,7 +15,7 @@ def ats() -> AutomationServer:
     TEST_WORKQUEUE = "Client library test"
 
     os.environ["ATS_WORKQUEUE_OVERRIDE"] = str(
-        _ensure_workqueue(os.environ.get("ATS_URL", "http://localhost/api"), TEST_WORKQUEUE)
+        _ensure_workqueue(os.environ["ATS_URL"], TEST_WORKQUEUE)
     )
 
     ats = AutomationServer.from_environment()
