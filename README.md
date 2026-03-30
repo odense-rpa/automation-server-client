@@ -33,15 +33,10 @@ For a more complete implementation see the [process-template](https://github.com
 
 The HTTP client was changed from `requests` to `httpx`. If your code catches `requests.HTTPError` from this library, update those to `httpx.HTTPStatusError`. See the [changelog](CHANGELOG.md) for the full list of changes.
 
-## Documentation
-For detailed documentation, please visit Documentation Link.
-
-## Contributing
-Contributions are welcome! Please read the contributing guidelines first.
 
 ## License
 This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## Contact
-If you have any questions or feedback, please contact us at tyra_rpa@odense.dk.
+If you have any questions or feedback, please open a discussion or an issue.
 
