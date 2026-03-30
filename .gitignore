@@ -12,3 +12,9 @@ wheels/
 
 # Temporary working file
 scratchpad.py
+
+# macOS
+.DS_Store
+
+# Playwright MCP
+.playwright-mcp/
