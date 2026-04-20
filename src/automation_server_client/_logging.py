@@ -1,10 +1,13 @@
 import logging
 import httpx
 import traceback
+from contextvars import ContextVar
 
 from typing import Dict, Any
 from datetime import datetime
 from ._config import AutomationServerConfig
+
+_emitting: ContextVar[bool] = ContextVar('emitting', default=False)
 
 
 # Custom HTTP Handler for logging
@@ -15,12 +18,16 @@ class AutomationServerLoggingHandler(logging.Handler):
         self.setFormatter(logging.Formatter("[%(levelname)s] %(name)s: %(message)s"))
 
     def emit(self, record):
-        log_record = self._format_log_record(record)
-
-        if AutomationServerConfig.session is None or AutomationServerConfig.url == "":
+        if _emitting.get():
             return
 
+        token = _emitting.set(True)
         try:
+            log_record = self._format_log_record(record)
+
+            if AutomationServerConfig.session is None or AutomationServerConfig.url == "":
+                return
+
             response = httpx.post(
                 f"{AutomationServerConfig.url}/audit-logs",
                 headers=AutomationServerConfig.auth_headers(),
@@ -29,10 +36,11 @@ class AutomationServerLoggingHandler(logging.Handler):
             response.raise_for_status()
 
         except Exception as e:
-            # Handle any exceptions that occur when sending the log
             print(
                 f"Failed to send log to {AutomationServerConfig.url}/audit-logs: {e}"
             )
+        finally:
+            _emitting.reset(token)
 
     def start_workitem(self, workitem_id: int):
         self.workitem_id = workitem_id
