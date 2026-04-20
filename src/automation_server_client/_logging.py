@@ -7,28 +7,27 @@ from typing import Dict, Any
 from datetime import datetime
 from ._config import AutomationServerConfig
 
+_emitting: ContextVar[bool] = ContextVar('emitting', default=False)
+
 
 # Custom HTTP Handler for logging
 class AutomationServerLoggingHandler(logging.Handler):
-    # Prevent recursive logging if httpx triggers logging at INFO level or below
-    _emitting: ContextVar[bool] = ContextVar('emitting', default=False)
-
     def __init__(self):
         super().__init__()
         self.workitem_id = None
         self.setFormatter(logging.Formatter("[%(levelname)s] %(name)s: %(message)s"))
 
     def emit(self, record):
-        if self._emitting.get():
+        if _emitting.get():
             return
 
-        log_record = self._format_log_record(record)
-
-        if AutomationServerConfig.session is None or AutomationServerConfig.url == "":
-            return
-
-        token = self._emitting.set(True)
+        token = _emitting.set(True)
         try:
+            log_record = self._format_log_record(record)
+
+            if AutomationServerConfig.session is None or AutomationServerConfig.url == "":
+                return
+
             response = httpx.post(
                 f"{AutomationServerConfig.url}/audit-logs",
                 headers=AutomationServerConfig.auth_headers(),
@@ -37,12 +36,11 @@ class AutomationServerLoggingHandler(logging.Handler):
             response.raise_for_status()
 
         except Exception as e:
-            # Handle any exceptions that occur when sending the log
             print(
                 f"Failed to send log to {AutomationServerConfig.url}/audit-logs: {e}"
             )
         finally:
-            self._emitting.reset(token)
+            _emitting.reset(token)
 
     def start_workitem(self, workitem_id: int):
         self.workitem_id = workitem_id
