@@ -45,6 +45,7 @@ class Process(BaseModel):
     requirements: Optional[str] = ""
     target_type: Optional[str] = None
     target_source: Optional[str] = ""
+    git_options: Optional[str] = ""
     target_credentials_id: int | None = None
     credentials_id: int | None = None
     workqueue_id: int | None = None
