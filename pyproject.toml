@@ -9,9 +9,11 @@ authors = [
 license = "MIT"
 requires-python = ">=3.13"
 dependencies = [
-    "python-dotenv>=1.0.1",
+    "python-dotenv>=1.2.2",
     "pydantic>=2.5.0",
     "httpx>=0.28.1",
+    "certifi>=2026.10.18",
+    "anyio>=4.14.2",
 ]
 
 [project.urls]
