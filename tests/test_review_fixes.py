@@ -35,7 +35,9 @@ def session_config(monkeypatch):
 
 def send(record_kwargs: dict) -> dict:
     """Emit one record through the handler and return the JSON body it posted."""
-    record = logging.getLogger("t").makeRecord("t", logging.INFO, "f.py", 1, **record_kwargs)
+    record = logging.getLogger("t").makeRecord(
+        "t", logging.INFO, "f.py", 1, **record_kwargs
+    )
     with patch("automation_server_client._logging.httpx.post") as post:
         post.return_value = MagicMock(status_code=204)
         ats_logging_handler.emit(record)
@@ -47,7 +49,14 @@ def send(record_kwargs: dict) -> dict:
 
 
 def test_non_json_extra_value_is_sent_as_string(session_config):
-    body = send({"msg": "Sent", "args": (), "exc_info": None, "extra": {"sent_at": datetime(2026, 11, 3, 9, 0)}})
+    body = send(
+        {
+            "msg": "Sent",
+            "args": (),
+            "exc_info": None,
+            "extra": {"sent_at": datetime(2026, 11, 3, 9, 0)},
+        }
+    )
     assert body["message"] == "Sent"
     assert body["structured_data"]["sent_at"] == "2026-11-03 09:00:00"
 
@@ -76,7 +85,9 @@ def test_failure_traceback_reaches_audit_fields(session_config):
 def test_fail_status_error_keeps_original_exception():
     item = make_item()
     ats_logging_handler.start_workitem(item.id)
-    with patch.object(WorkItem, "update_status", side_effect=httpx.ConnectError("down")):
+    with patch.object(
+        WorkItem, "update_status", side_effect=httpx.ConnectError("down")
+    ):
         with pytest.raises(KeyError):
             with item:
                 raise KeyError("url")
@@ -85,7 +96,9 @@ def test_fail_status_error_keeps_original_exception():
 
 def test_complete_status_error_still_raises_and_detaches():
     item = make_item()
-    with patch.object(WorkItem, "update_status", side_effect=httpx.ConnectError("down")):
+    with patch.object(
+        WorkItem, "update_status", side_effect=httpx.ConnectError("down")
+    ):
         with pytest.raises(httpx.ConnectError):
             with item:
                 pass
@@ -102,7 +115,10 @@ def test_long_failure_message_is_capped():
 
 
 def test_business_message_is_kept_when_short():
-    assert _failure_reason(WorkItemError, WorkItemError("Citizen not found")) == "Citizen not found"
+    assert (
+        _failure_reason(WorkItemError, WorkItemError("Citizen not found"))
+        == "Citizen not found"
+    )
 
 
 # Medium 5: no .env under the worker
@@ -133,7 +149,11 @@ def test_dotenv_loaded_outside_worker(monkeypatch):
         ("http://api:8000", "http://api:8000/workqueues/1/next_item", False),
         ("http://localhost:80/api/", "http://localhost/api//workitems/5/status", False),
         ("http://localhost/api", "http://localhost/api", False),
-        ("http://localhost/api", "https://nexus.example.invalid/api/patients/123", True),
+        (
+            "http://localhost/api",
+            "https://nexus.example.invalid/api/patients/123",
+            True,
+        ),
         ("http://localhost/api", "http://localhost/apix/other", True),
         ("", "http://api:8000/workqueues/1", True),
     ],
@@ -143,9 +163,13 @@ def test_httpx_filter_only_drops_own_requests(monkeypatch, ats_url, request_url,
 
     monkeypatch.setattr(AutomationServerConfig, "url", ats_url)
     record = logging.getLogger("httpx").makeRecord(
-        "httpx", logging.INFO, "f.py", 1,
+        "httpx",
+        logging.INFO,
+        "f.py",
+        1,
         'HTTP Request: %s %s "%s %d %s"',
-        ("GET", httpx.URL(request_url), "HTTP/1.1", 200, "OK"), None,
+        ("GET", httpx.URL(request_url), "HTTP/1.1", 200, "OK"),
+        None,
     )
     assert _SkipOwnRequests().filter(record) is kept
 
@@ -153,7 +177,9 @@ def test_httpx_filter_only_drops_own_requests(monkeypatch, ats_url, request_url,
 def test_httpx_filter_is_installed_on_httpx_logger():
     from automation_server_client._logging import _SkipOwnRequests
 
-    assert any(isinstance(f, _SkipOwnRequests) for f in logging.getLogger("httpx").filters)
+    assert any(
+        isinstance(f, _SkipOwnRequests) for f in logging.getLogger("httpx").filters
+    )
 
 
 # Low 8: str(AutomationServer) shows IDs and names only
@@ -174,7 +200,10 @@ def test_automation_server_str_has_no_process_details():
     )
     ats.workqueue_id = 1
 
-    assert str(ats) == "AutomationServer(url=http://api:8000, session=8, process=Test-process, workqueue_id=1)"
+    assert (
+        str(ats)
+        == "AutomationServer(url=http://api:8000, session=8, process=Test-process, workqueue_id=1)"
+    )
 
     ats.session = ats.process = None
     assert "session=None, process=None" in str(ats)

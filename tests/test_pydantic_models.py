@@ -117,6 +117,7 @@ def test_backward_compatibility_with_minimal_data():
     assert session.id == 1
     assert session.status == "running"
 
+
 def test_session_with_null_parameters():
     """Test that models work with minimal required data"""
     minimal_session_data = {
@@ -140,4 +141,3 @@ def test_session_with_null_parameters():
     minimal_session_data["parameters"] = ""
     session = Session.model_validate(minimal_session_data)
     assert session.parameters == ""
-

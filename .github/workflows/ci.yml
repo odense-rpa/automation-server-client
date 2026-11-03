@@ -1,0 +1,113 @@
+# .github/workflows/ci.yml
+#
+# Lint, plus end-to-end tests against a throwaway Automation Server
+# (postgres + ats-backend image, see tests/ci/compose.yml):
+#   - stable:  the latest automation-server release (required to merge)
+#   - nightly: the nightly image, as early warning (non-blocking)
+# Runs nightly too, so a new server release that breaks the client shows up
+# even when nothing changed here.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: '30 5 * * *'
+  workflow_dispatch:
+  workflow_call:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Lint
+        run: uv run ruff check src tests
+
+      - name: Format
+        run: uv run ruff format --check src tests
+
+  e2e:
+    name: e2e (${{ matrix.server }})
+    runs-on: ubuntu-latest
+    # The nightly server may have unreleased changes; report, don't block
+    continue-on-error: ${{ matrix.server == 'nightly' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        server: [stable, nightly]
+    env:
+      ATS_URL: http://localhost:8000
+      COMPOSE_FILE: tests/ci/compose.yml
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+          enable-cache: true
+
+      - name: Resolve server image tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ "${{ matrix.server }}" == "stable" ]]; then
+            TAG=$(gh release view --repo odense-rpa/automation-server --json tagName -q .tagName)
+            TAG="${TAG#v}"
+          else
+            TAG=nightly
+          fi
+          echo "Testing against ats-backend:$TAG"
+          echo "ATS_SERVER_TAG=$TAG" >> "$GITHUB_ENV"
+
+      - name: Start Automation Server
+        run: docker compose up -d --wait --wait-timeout 180
+
+      - name: Create access token
+        run: |
+          # A fresh server with no tokens accepts requests; create one, after
+          # which authentication is enforced (verified below)
+          TOKEN=$(curl -sf -X POST "$ATS_URL/accesstokens" \
+            -H 'Content-Type: application/json' -d '{"identifier":"client-ci"}' \
+            | jq -r .access_token)
+          echo "::add-mask::$TOKEN"
+          echo "ATS_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+          STATUS=$(curl -s -o /dev/null -w '%{http_code}' "$ATS_URL/workqueues")
+          if [[ "$STATUS" != "401" ]]; then
+            echo "Expected 401 without a token, got $STATUS" >&2
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run tests
+        run: uv run pytest -v
+
+      - name: Server logs
+        if: failure()
+        run: docker compose logs api
+
+      - name: Stop Automation Server
+        if: always()
+        run: docker compose down -v

@@ -9,7 +9,7 @@ from typing import Dict, Any
 from datetime import datetime
 from ._config import AutomationServerConfig
 
-_emitting: ContextVar[bool] = ContextVar('emitting', default=False)
+_emitting: ContextVar[bool] = ContextVar("emitting", default=False)
 
 
 # Custom HTTP Handler for logging
@@ -27,7 +27,10 @@ class AutomationServerLoggingHandler(logging.Handler):
         try:
             log_record = self._format_log_record(record)
 
-            if AutomationServerConfig.session is None or AutomationServerConfig.url == "":
+            if (
+                AutomationServerConfig.session is None
+                or AutomationServerConfig.url == ""
+            ):
                 return
 
             # default=str: an extra value that isn't JSON (datetime, objects)

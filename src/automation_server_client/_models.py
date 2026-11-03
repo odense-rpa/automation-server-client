@@ -10,6 +10,7 @@ from urllib.parse import quote
 from ._config import AutomationServerConfig
 from ._logging import ats_logging_handler
 
+
 class Session(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -111,7 +112,6 @@ class Workqueue(BaseModel):
         """Retrieve a workqueue by name from the automation server."""
         response = httpx.get(
             f"{AutomationServerConfig.url}/workqueues/by_name/{quote(workqueue_name)}",
-
             headers=AutomationServerConfig.auth_headers(),
         )
         response.raise_for_status()

@@ -1,21 +1,33 @@
 import pytest
 import os
 from dotenv import load_dotenv
-from automation_server_client import AutomationServer
+from automation_server_client import AutomationServer, AutomationServerConfig
 import httpx
 
 load_dotenv()
 
+_CONFIG_ATTRS = ("token", "url", "session", "resource", "process", "workqueue_override")
+
+
+@pytest.fixture(autouse=True)
+def _restore_config():
+    """AutomationServerConfig is global state; reset it after every test."""
+    saved = {name: getattr(AutomationServerConfig, name) for name in _CONFIG_ATTRS}
+    yield
+    for name, value in saved.items():
+        setattr(AutomationServerConfig, name, value)
+
 
 @pytest.fixture(scope="function")
-def ats() -> AutomationServer:
-    # We assume there is a running target development environment
-    os.environ.setdefault("ATS_URL", "http://localhost/api")
+def ats(monkeypatch) -> AutomationServer:
+    # Needs a running server: the dev stack, or the CI compose in tests/ci/
+    monkeypatch.setenv("ATS_URL", os.environ.get("ATS_URL", "http://localhost/api"))
 
     TEST_WORKQUEUE = "Client library test"
 
-    os.environ["ATS_WORKQUEUE_OVERRIDE"] = str(
-        _ensure_workqueue(os.environ["ATS_URL"], TEST_WORKQUEUE)
+    monkeypatch.setenv(
+        "ATS_WORKQUEUE_OVERRIDE",
+        str(_ensure_workqueue(os.environ["ATS_URL"], TEST_WORKQUEUE)),
     )
 
     ats = AutomationServer.from_environment()

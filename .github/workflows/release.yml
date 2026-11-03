@@ -1,0 +1,59 @@
+# .github/workflows/release.yml
+#
+# Pushing a v* tag runs CI against that commit and, if it passes, publishes a
+# GitHub Release with the matching CHANGELOG section as release notes.
+#
+# Release steps: bump `version` in pyproject.toml (and `uv lock`), add a
+# "## [X.Y.Z] - date" section to CHANGELOG.md, merge, then on main:
+#   git tag -a vX.Y.Z -m "Release vX.Y.Z" && git push origin vX.Y.Z
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  github-release:
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Check version and changelog
+        id: notes
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          PYPROJECT=$(grep -m1 '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+          if [[ "$PYPROJECT" != "$VERSION" ]]; then
+            echo "Tag $GITHUB_REF_NAME does not match pyproject.toml version $PYPROJECT" >&2
+            exit 1
+          fi
+          awk -v v="$VERSION" '
+            $0 ~ "^## \\[" v "\\]" { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md | sed '/^---$/d' > release_notes.md
+          if [[ ! -s release_notes.md ]]; then
+            echo "No CHANGELOG.md section for $VERSION" >&2
+            exit 1
+          fi
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists, leaving it as is"
+          else
+            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" \
+              --notes-file release_notes.md --verify-tag
+          fi

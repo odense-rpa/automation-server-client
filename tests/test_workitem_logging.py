@@ -64,7 +64,9 @@ def test_failure_logs_reason_with_traceback_and_no_data(caplog, exc, expected):
     update_status.assert_called_once_with("failed", expected)
 
     [record] = [r for r in caplog.records if r.levelno == logging.ERROR]
-    assert record.getMessage() == f"WorkItem(id=39, reference=ref-39) failed: {expected}"
+    assert (
+        record.getMessage() == f"WorkItem(id=39, reference=ref-39) failed: {expected}"
+    )
     assert record.exc_info is not None and record.exc_info[0] is type(exc)
     assert "Testperson" not in record.getMessage()
 
