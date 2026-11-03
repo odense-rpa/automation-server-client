@@ -176,6 +176,18 @@ print(f"Password: {cred.password}")
 print(f"Additional data: {cred.data}")
 ```
 
+### Datastore (State Between Runs)
+
+**Location**: `src/automation_server_client/_models.py` (`Datastore`, `DatastoreConflict`)
+
+```python
+from automation_server_client import Datastore
+
+Datastore.update("my-state", lambda data: {**data, "count": data.get("count", 0) + 1})
+```
+
+`get()` returns an empty document (version 0) when the datastore doesn't exist; `save()` sends the version that was read as `expected_version` and raises `DatastoreConflict` on 409; `update()` retries; `set()` overwrites. Writes are logged on the `ats` logger.
+
 ### Configuration Management
 
 **Location**: `src/automation_server_client/_config.py:5`

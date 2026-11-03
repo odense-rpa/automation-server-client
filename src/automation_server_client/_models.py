@@ -3,7 +3,7 @@ import httpx
 
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import Callable, Optional
 from pydantic import BaseModel, ConfigDict, Field
 from urllib.parse import quote
 
@@ -298,3 +298,115 @@ class Credential(BaseModel):
         response.raise_for_status()
 
         return Credential.model_validate(response.json())
+
+
+class DatastoreConflict(Exception):
+    """The datastore was written by someone else since it was read."""
+
+
+def _datastore_url(name: str) -> str:
+    return f"{AutomationServerConfig.url}/datastores/by_name/{quote(name, safe='')}"
+
+
+class Datastore(BaseModel):
+    """A named JSON document for keeping state between runs.
+
+    Reading a datastore that doesn't exist yet gives an empty document with
+    version 0; it is created on the first save. Every save is logged, so the
+    audit log of a session shows which datastores it changed.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: Optional[int] = None
+    name: str
+    description: Optional[str] = ""
+    # Kept out of repr: documents can be large
+    data: dict = Field(default_factory=dict, repr=False)
+    # The version that was read; 0 when the datastore doesn't exist yet
+    version: int = 0
+    size_bytes: int = 0
+    deleted: bool = False
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    @staticmethod
+    def get(name: str) -> "Datastore":
+        """Read a datastore by name; an empty one if it doesn't exist yet."""
+        response = httpx.get(
+            _datastore_url(name), headers=AutomationServerConfig.auth_headers()
+        )
+        if response.status_code == 404:
+            return Datastore(name=name)
+        response.raise_for_status()
+
+        return Datastore.model_validate(response.json())
+
+    def save(self) -> None:
+        """Save ``data``, if nobody else wrote the datastore since it was read.
+
+        Raises DatastoreConflict otherwise: read it again and redo the change,
+        or use Datastore.update(), which does that for you.
+        """
+        saved = Datastore._write(self.name, self.data, self.version)
+        for field in Datastore.model_fields:
+            setattr(self, field, getattr(saved, field))
+
+    @staticmethod
+    def set(name: str, data: dict) -> "Datastore":
+        """Overwrite a datastore's document, whatever it holds now.
+
+        Last writer wins: only safe when no other run writes the same
+        datastore at the same time. Otherwise use update().
+        """
+        return Datastore._write(name, data, expected_version=None)
+
+    @staticmethod
+    def update(
+        name: str, change: Callable[[dict], dict], attempts: int = 5
+    ) -> "Datastore":
+        """Read, change and save a datastore, retrying if someone else wrote.
+
+        ``change`` gets the current document and returns the new one. It can
+        be called more than once, so it must not have side effects.
+        """
+        for _ in range(attempts):
+            datastore = Datastore.get(name)
+            datastore.data = change(datastore.data)
+            try:
+                datastore.save()
+                return datastore
+            except DatastoreConflict:
+                logging.getLogger("ats").debug(
+                    "Datastore '%s' was changed by someone else, retrying", name
+                )
+
+        raise DatastoreConflict(
+            f"Datastore '{name}' kept changing; gave up after {attempts} attempts"
+        )
+
+    @staticmethod
+    def _write(name: str, data: dict, expected_version: int | None) -> "Datastore":
+        body = {"data": data}
+        if expected_version is not None:
+            # 0: the datastore must not exist yet
+            body["expected_version"] = expected_version
+
+        response = httpx.put(
+            _datastore_url(name),
+            headers=AutomationServerConfig.auth_headers(),
+            json=body,
+        )
+        if response.status_code == 409:
+            raise DatastoreConflict(response.json().get("detail", response.text))
+        response.raise_for_status()
+
+        saved = Datastore.model_validate(response.json())
+        logging.getLogger("ats").info(
+            "Datastore '%s' %s (version %d, %d bytes)",
+            name,
+            "created" if response.status_code == 201 else "saved",
+            saved.version,
+            saved.size_bytes,
+        )
+        return saved

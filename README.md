@@ -37,6 +37,30 @@ for item in workqueue:
   - Messages are cut at 1,000 characters. The full traceback is always in the audit log.
 - To fail one item and continue with the next, handle the error yourself, e.g. `item.fail("Citizen not found")` inside the block.
 
+### Datastores
+
+A datastore is a named JSON document for keeping state between runs, such as counters or what was handled last time. It needs automation-server 0.8.2 or later.
+
+```python
+from automation_server_client import Datastore
+
+# Read, change and save, retrying if another run wrote in the meantime
+Datastore.update("team-distribution", lambda data: {**data, "A": data.get("A", 0) + 1})
+
+# Or step by step
+state = Datastore.get("team-distribution")  # empty ({}) if it doesn't exist yet
+state.data["last_run"] = "2026-11-03"
+state.save()  # raises DatastoreConflict if someone else wrote since get()
+
+# Overwrite regardless (last writer wins)
+Datastore.set("team-distribution", {"A": 0, "B": 0})
+```
+
+- A datastore is created the first time it is saved.
+- `save()` only succeeds if nobody wrote the datastore since it was read. `update()` handles that for you: on a conflict it reads again and calls your function again (up to 5 attempts), so the function must not have side effects.
+- Every write is logged (`Datastore 'team-distribution' saved (version 4, 52 bytes)`), so a session's audit log shows which datastores it changed. The document itself is not logged.
+- Not for secrets: use credentials for passwords and keys.
+
 ### Configuration
 
 Configuration comes from `ATS_*` environment variables. When the Automation Server worker runs your process, it sets all of them (including `ATS_SESSION`), and a `.env` file is **not** read. That way a leftover `.env` can't override the worker's configuration. Outside the worker, for example when developing locally, a `.env` file is loaded if present.
@@ -47,6 +71,7 @@ Configuration comes from `ATS_*` environment variables. When the Automation Serv
 * Retrieve process and workqueue status
 * Retrieve work items for processing
 * Logging actions and workitems
+* Datastores for state between runs
 
 ## Migrating from 0.3.x to 0.4.0
 

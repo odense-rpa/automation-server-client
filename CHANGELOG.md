@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- `Datastore`: named JSON documents for keeping state between runs (needs automation-server 0.8.2+). `Datastore.get(name)` reads one (empty, version 0, if it doesn't exist yet), `save()` writes it back if nobody else wrote since it was read (`DatastoreConflict` otherwise), `Datastore.update(name, change)` does read-change-save with retries, and `Datastore.set(name, data)` overwrites. Every write is logged with the datastore's name, version and size, not its contents.
+
 ## [0.4.0] - 2026-11-03
 
 ### Fixed
