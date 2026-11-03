@@ -4,7 +4,7 @@ import httpx
 from datetime import datetime
 from enum import Enum
 from typing import Optional
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from urllib.parse import quote
 
 from ._config import AutomationServerConfig
@@ -169,11 +169,27 @@ class Workqueue(BaseModel):
         return workitem
 
 
+def _failure_reason(exc_type, exc_value) -> str:
+    """Work item failure message shown to operators.
+
+    WorkItemError carries a business message from the automation, so it is used
+    as-is. Other exceptions are bugs or system errors, so the exception type is
+    included: "KeyError: 'url'" says more than "'url'".
+    """
+    from ._server import WorkItemError  # avoid a circular import at module load
+
+    message = str(exc_value)
+    if issubclass(exc_type, WorkItemError) and message:
+        return message
+    return f"{exc_type.__name__}: {message}" if message else exc_type.__name__
+
+
 class WorkItem(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     id: Optional[int] = None
-    data: dict
+    # Kept out of repr: work item data can be large and contain personal data
+    data: dict = Field(repr=False)
     reference: Optional[str] = ""
     locked: bool
     status: str
@@ -202,11 +218,15 @@ class WorkItem(BaseModel):
 
         return self
 
-    def __exit__(self, exc_type, exc_value, _traceback):
+    def __exit__(self, exc_type, exc_value, traceback):
         logger = logging.getLogger("ats")
         if exc_type:
-            logger.error(f"An error occurred while processing {self}: {exc_value}")
-            self.fail(str(exc_value))
+            reason = _failure_reason(exc_type, exc_value)
+            # exc_info puts the traceback in the audit log's own field, not the message
+            logger.error(
+                "%s failed: %s", self, reason, exc_info=(exc_type, exc_value, traceback)
+            )
+            self.fail(reason)
         elif self.status == "in progress":
             self.complete("Completed")
 
@@ -214,7 +234,7 @@ class WorkItem(BaseModel):
         ats_logging_handler.end_workitem()
 
     def __str__(self) -> str:
-        return f"WorkItem(id={self.id}, reference={self.reference}, data={self.data})"
+        return f"WorkItem(id={self.id}, reference={self.reference})"
 
     def fail(self, message):
         """Mark the work item as failed."""
@@ -247,7 +267,7 @@ class Credential(BaseModel):
     name: str
     data: dict
     username: Optional[str] = None
-    password: Optional[str] = None
+    password: Optional[str] = Field(default=None, repr=False)
     deleted: bool
     created_at: datetime
     updated_at: datetime

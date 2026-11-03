@@ -1,5 +1,24 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- Failed work items no longer dump their `data` into the log. `WorkItem.__str__` and `repr()` leave out `data`, which could be very large and contain personal data (a nested test item produced a 31 KB audit log entry, repeated again in the automation's stderr).
+- Work item failures are logged with `exc_info`, so the exception type and traceback reach the audit log's own fields instead of being lost.
+- The failure message stored on the work item now includes the exception type for unexpected errors (`KeyError: 'url'` instead of `'url'`). `WorkItemError` messages are kept as-is, since they are business messages from the automation.
+- Logging handler: infinite recursion when httpx logs at INFO level during an emit.
+
+### Added
+- `Process.git_options` field.
+
+### Security
+- `Credential.password` is left out of `repr()`, so logging a credential object no longer prints the password.
+
+### Internal
+- Tests send the `ATS_TOKEN` when talking to the dev server, so the live tests also run against servers that require authentication.
+
+---
+
 ## [0.3.0] - 2026-03-30
 
 ### Added

@@ -17,7 +17,7 @@ def test_basic_create_log_entry(ats: AutomationServer):
         "logger_name": "test_logger",
     }
 
-    with httpx.Client() as client:
+    with httpx.Client(headers=AutomationServerConfig.auth_headers()) as client:
         response = client.post(
             f"{AutomationServerConfig.url}/audit-logs", json=log_data
         )
@@ -63,7 +63,7 @@ def test_server_accepts_record(ats: AutomationServer):
 
     formatted_log = ats_logging_handler._format_log_record(record)
 
-    with httpx.Client() as client:
+    with httpx.Client(headers=AutomationServerConfig.auth_headers()) as client:
         response = client.post(
             f"{AutomationServerConfig.url}/audit-logs", json=formatted_log
         )
