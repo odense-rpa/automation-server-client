@@ -76,8 +76,13 @@ def test_emit_guard_prevents_reentry():
     try:
         with patch("automation_server_client._logging.httpx.post") as mock_post:
             record = LogRecord(
-                name="test", level=logging.INFO, pathname="", lineno=0,
-                msg="should be blocked", args=(), exc_info=None,
+                name="test",
+                level=logging.INFO,
+                pathname="",
+                lineno=0,
+                msg="should be blocked",
+                args=(),
+                exc_info=None,
             )
             ats_logging_handler.emit(record)
         mock_post.assert_not_called()
