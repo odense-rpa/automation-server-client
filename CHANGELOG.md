@@ -19,6 +19,11 @@
 - `Process.git_options` field.
 
 ### Security
+- Dependency security: minimum versions raised so automations that update to 0.4.0 also get the fixes, even with an older lock file of their own:
+  - `certifi>=2026.10.18`: drops the compromised emSign root CAs (GHSA-6q48-6c7w-9gw2, critical). certifi provides httpx's CA bundle.
+  - `anyio>=4.14.2`: TLS certificate spoofing via IDNA host name encoding (CVE-2026-63374, critical) and a process-pool hang (CVE-2026-64847).
+  - `python-dotenv>=1.2.2`: symlink file overwrite in `set_key()`/`unset_key()` (CVE-2026-28684; the library only uses `load_dotenv()`, but the floor costs nothing).
+  - Lock file also updated: idna 3.20 (CVE-2026-45409), pytest 9.2.0 (dev, CVE-2025-71176). `pip-audit` and Trivy report no known vulnerabilities.
 - `str(AutomationServer)` shows only IDs and names (`session=8, process=Test-process`) instead of the full `Session` and `Process`, which included the repo URL and git options.
 - `Credential.password` is left out of `repr()`, so logging a credential object no longer prints the password. Note that `model_dump()` and `model_dump_json()` still include it.
 
