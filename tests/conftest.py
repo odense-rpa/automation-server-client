@@ -26,13 +26,21 @@ def ats() -> AutomationServer:
     return ats
 
 
+def _auth_headers() -> dict:
+    token = os.environ.get("ATS_TOKEN")
+    return {"Authorization": f"Bearer {token}"} if token else {}
+
+
 def _ensure_workqueue(base_url: str, workqueue_name: str) -> int:
-    response = httpx.get(f"{base_url}/workqueues").json()
+    response = httpx.get(f"{base_url}/workqueues", headers=_auth_headers())
+    response.raise_for_status()
+    response = response.json()
     workqueues = {wq["name"]: wq["id"] for wq in response}
 
     if workqueue_name not in workqueues:
         response = httpx.post(
             f"{base_url}/workqueues",
+            headers=_auth_headers(),
             json={
                 "name": workqueue_name,
                 "description": "Workqueue for testing the client library",
