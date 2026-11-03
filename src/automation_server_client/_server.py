@@ -41,7 +41,13 @@ class AutomationServer:
         return AutomationServer(AutomationServerConfig.session)
 
     def __str__(self):
-        return f"AutomationServer(url={self.url}, session = {self.session}, process = {self.process}, workqueue_id={self.workqueue_id})"
+        # IDs and names only: the full Process includes the repo URL and git options
+        session = self.session.id if self.session else None
+        process = self.process.name if self.process else None
+        return (
+            f"AutomationServer(url={self.url}, session={session}, "
+            f"process={process}, workqueue_id={self.workqueue_id})"
+        )
 
 
 class WorkItemError(Exception):

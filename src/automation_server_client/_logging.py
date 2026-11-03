@@ -1,4 +1,6 @@
+import json
 import logging
+import sys
 import httpx
 import traceback
 from contextvars import ContextVar
@@ -28,16 +30,22 @@ class AutomationServerLoggingHandler(logging.Handler):
             if AutomationServerConfig.session is None or AutomationServerConfig.url == "":
                 return
 
+            # default=str: an extra value that isn't JSON (datetime, objects)
+            # must not cost us the whole log record
             response = httpx.post(
                 f"{AutomationServerConfig.url}/audit-logs",
-                headers=AutomationServerConfig.auth_headers(),
-                json=log_record,
+                headers={
+                    **AutomationServerConfig.auth_headers(),
+                    "Content-Type": "application/json",
+                },
+                content=json.dumps(log_record, default=str),
             )
             response.raise_for_status()
 
         except Exception as e:
             print(
-                f"Failed to send log to {AutomationServerConfig.url}/audit-logs: {e}"
+                f"Failed to send log to {AutomationServerConfig.url}/audit-logs: {e}",
+                file=sys.stderr,
             )
         finally:
             _emitting.reset(token)
@@ -91,7 +99,8 @@ class AutomationServerLoggingHandler(logging.Handler):
         exception_message = None
         traceback_text = None
 
-        if record.exc_info:
+        # exc_info=True outside an except block gives (None, None, None)
+        if record.exc_info and record.exc_info[0] is not None:
             exception_type = record.exc_info[0].__name__
             exception_message = str(record.exc_info[1])
             traceback_text = "".join(traceback.format_exception(*record.exc_info))
@@ -114,3 +123,27 @@ class AutomationServerLoggingHandler(logging.Handler):
 
 
 ats_logging_handler = AutomationServerLoggingHandler()
+
+
+class _SkipOwnRequests(logging.Filter):
+    """Drop httpx's "HTTP Request: ..." lines for this library's own calls.
+
+    Only requests to the Automation Server (ATS_URL) are dropped. httpx lines
+    for other systems are kept: clients such as kmd-nexus-client rely on them
+    as required audit logs of their interactions.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if not AutomationServerConfig.url or not record.args or len(record.args) < 2:
+            return True
+        try:
+            base = str(httpx.URL(AutomationServerConfig.url)).rstrip("/")
+            target = str(httpx.URL(str(record.args[1])))
+        except Exception:
+            return True
+        return not (target == base or target.startswith(base + "/"))
+
+
+# A filter on the "httpx" logger itself applies before any handler, so the lines
+# disappear from the audit log and the console alike, but only for our requests.
+logging.getLogger("httpx").addFilter(_SkipOwnRequests())

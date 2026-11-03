@@ -13,7 +13,10 @@ class AutomationServerConfig:
 
     @staticmethod
     def init_from_environment():
-        load_dotenv()
+        # The worker passes the full configuration (it always sets ATS_SESSION).
+        # Only read .env outside the worker, so a stray .env can't override it.
+        if "ATS_SESSION" not in os.environ:
+            load_dotenv()
 
         AutomationServerConfig.url = (
             os.environ["ATS_URL"] if "ATS_URL" in os.environ else ""
