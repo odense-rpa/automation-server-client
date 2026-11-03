@@ -43,6 +43,9 @@ jobs:
       - name: Lint
         run: uv run ruff check src tests
 
+      - name: Format
+        run: uv run ruff format --check src tests
+
   e2e:
     name: e2e (${{ matrix.server }})
     runs-on: ubuntu-latest

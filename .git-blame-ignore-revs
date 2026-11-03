@@ -1,0 +1,5 @@
+# Formatting-only commits, ignored by `git blame` and GitHub blame.
+# Locally: git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# style: apply ruff format
+31ead587539f3b6b00e2c5e83570a0cb9c966f25
