@@ -1,5 +1,4 @@
 from datetime import datetime
-import os
 
 import pytest
 from automation_server_client._server import AutomationServer

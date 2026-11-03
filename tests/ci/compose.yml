@@ -1,0 +1,37 @@
+# Throwaway Automation Server for the client's end-to-end tests (used by CI,
+# also runnable locally):
+#
+#   ATS_SERVER_TAG=0.8.1 docker compose -f tests/ci/compose.yml up -d --wait
+#
+# ATS_SERVER_TAG is an ats-backend image tag: a release version or "nightly".
+# Set ATS_PORT to avoid clashing with a running dev stack (default 8000).
+name: ats-client-ci
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ats
+      POSTGRES_PASSWORD: ats
+      POSTGRES_DB: ats
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ats -d ats"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  api:
+    image: ghcr.io/odense-rpa/ats-backend:${ATS_SERVER_TAG:?set ATS_SERVER_TAG to a release version or nightly}
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://ats:ats@db:5432/ats
+    ports:
+      - "${ATS_PORT:-8000}:8000"
+    # The image's own healthcheck polls every 30s; poll faster so CI doesn't wait
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/ready"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
