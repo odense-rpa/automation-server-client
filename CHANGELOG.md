@@ -1,18 +1,26 @@
 # Changelog
 
-## [Unreleased]
+## [0.4.0] - 2026-11-03
 
 ### Fixed
 - Failed work items no longer dump their `data` into the log. `WorkItem.__str__` and `repr()` leave out `data`, which could be very large and contain personal data (a nested test item produced a 31 KB audit log entry, repeated again in the automation's stderr).
 - Work item failures are logged with `exc_info`, so the exception type and traceback reach the audit log's own fields instead of being lost.
 - The failure message stored on the work item now includes the exception type for unexpected errors (`KeyError: 'url'` instead of `'url'`). `WorkItemError` messages are kept as-is, since they are business messages from the automation.
 - Logging handler: infinite recursion when httpx logs at INFO level during an emit.
+- Logging handler: a record is no longer dropped when an `extra=` value isn't JSON serializable (e.g. a `datetime`; it's sent as a string), or when `exc_info=True` is used outside an `except` block. Send failures are printed to stderr instead of stdout.
+- If the server can't be reached when a work item is marked failed, the automation's own exception is still the one raised (the status error is logged next to it). The logging handler is always detached from the item, even when a status update fails.
+- Failure messages stored on work items are capped at 1,000 characters.
+
+### Changed
+- httpx's `HTTP Request: ...` INFO lines are no longer logged for this library's own calls to the Automation Server (otherwise every fetch and status update became an audit log entry, and `get_item_by_reference` put references in the log). httpx lines for other systems are unaffected, so clients like kmd-nexus-client keep their audit logging.
+- `.env` is no longer read when running under the worker (when `ATS_SESSION` is set), so a stray `.env` can't override the worker's configuration.
 
 ### Added
 - `Process.git_options` field.
 
 ### Security
-- `Credential.password` is left out of `repr()`, so logging a credential object no longer prints the password.
+- `str(AutomationServer)` shows only IDs and names (`session=8, process=Test-process`) instead of the full `Session` and `Process`, which included the repo URL and git options.
+- `Credential.password` is left out of `repr()`, so logging a credential object no longer prints the password. Note that `model_dump()` and `model_dump_json()` still include it.
 
 ### Internal
 - Tests send the `ATS_TOKEN` when talking to the dev server, so the live tests also run against servers that require authentication.

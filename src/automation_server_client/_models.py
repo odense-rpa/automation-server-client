@@ -169,6 +169,9 @@ class Workqueue(BaseModel):
         return workitem
 
 
+MAX_MESSAGE_LENGTH = 1000
+
+
 def _failure_reason(exc_type, exc_value) -> str:
     """Work item failure message shown to operators.
 
@@ -179,9 +182,12 @@ def _failure_reason(exc_type, exc_value) -> str:
     from ._server import WorkItemError  # avoid a circular import at module load
 
     message = str(exc_value)
-    if issubclass(exc_type, WorkItemError) and message:
-        return message
-    return f"{exc_type.__name__}: {message}" if message else exc_type.__name__
+    if not (issubclass(exc_type, WorkItemError) and message):
+        message = f"{exc_type.__name__}: {message}" if message else exc_type.__name__
+    # Long exception texts (timeouts, HTTP errors) are cut; the full text is in the log
+    if len(message) > MAX_MESSAGE_LENGTH:
+        message = message[: MAX_MESSAGE_LENGTH - 1] + "…"
+    return message
 
 
 class WorkItem(BaseModel):
@@ -220,18 +226,28 @@ class WorkItem(BaseModel):
 
     def __exit__(self, exc_type, exc_value, traceback):
         logger = logging.getLogger("ats")
-        if exc_type:
-            reason = _failure_reason(exc_type, exc_value)
-            # exc_info puts the traceback in the audit log's own field, not the message
-            logger.error(
-                "%s failed: %s", self, reason, exc_info=(exc_type, exc_value, traceback)
-            )
-            self.fail(reason)
-        elif self.status == "in progress":
-            self.complete("Completed")
+        try:
+            if exc_type:
+                reason = _failure_reason(exc_type, exc_value)
+                # exc_info puts the traceback in the audit log's own field
+                logger.error(
+                    "%s failed: %s",
+                    self,
+                    reason,
+                    exc_info=(exc_type, exc_value, traceback),
+                )
+                try:
+                    self.fail(reason)
+                except httpx.HTTPError as e:
+                    # Don't let a server problem replace the automation's own error,
+                    # which is what the operator needs to see.
+                    logger.error("Could not mark %s as failed: %r", self, e)
+            elif self.status == "in progress":
+                self.complete("Completed")
 
-        logger.debug(f"{'Failed' if exc_type else 'Finished'} processing {self}")
-        ats_logging_handler.end_workitem()
+            logger.debug(f"{'Failed' if exc_type else 'Finished'} processing {self}")
+        finally:
+            ats_logging_handler.end_workitem()
 
     def __str__(self) -> str:
         return f"WorkItem(id={self.id}, reference={self.reference})"
